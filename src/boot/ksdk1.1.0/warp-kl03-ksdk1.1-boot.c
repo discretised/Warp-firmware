@@ -57,7 +57,7 @@
 
 
 #define WARP_FRDMKL03
-
+#include "devSSD1331.h"
 
 /*
 *	Comment out the header file to disable devices
@@ -1312,9 +1312,8 @@ main(void)
 #ifdef WARP_BUILD_ENABLE_DEVADXL362
 	initADXL362(&deviceADXL362State);
 #endif
-
-
-	/*
+	
+/*
 	 *	Initialization: the PAN1326, generating its 32k clock
 	 */
 #ifdef WARP_BUILD_ENABLE_DEVPAN1326
@@ -1353,7 +1352,7 @@ main(void)
 	 *	Notreached
 	 */
 #endif
-
+devSSD1331init();
 	while (1)
 	{
 		/*
