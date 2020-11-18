@@ -57,7 +57,7 @@
 
 
 #define WARP_FRDMKL03
-
+#include "devSSD1331.h"
 
 /*
 *	Comment out the header file to disable devices
@@ -85,8 +85,7 @@
 #else
 #	include "devMMA8451Q.h"
 #endif
-
-
+#define WARP_BUILD_ENABLE_INA219
 #define WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
 //#define WARP_BUILD_BOOT_TO_CSVSTREAM
 
@@ -1353,7 +1352,6 @@ main(void)
 	 *	Notreached
 	 */
 #endif
-
 	while (1)
 	{
 		/*
@@ -1465,6 +1463,16 @@ main(void)
 
 		SEGGER_RTT_WriteString(0, "\rEnter selection> ");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
+		
+#ifdef WARP_BUILD_ENABLE_INA219
+		SEGGER_RTT_WriteString(0, "\r- '1': Coursework 4 current read sequence\n");
+		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
+#endif
+
+		SEGGER_RTT_WriteString(0, "\rEnter selection> ");
+		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
+
+		
 		key = SEGGER_RTT_WaitKey();
 		
 		switch (key)
@@ -1593,8 +1601,6 @@ main(void)
 
 				SEGGER_RTT_WriteString(0, "\r\tEnter selection> ");
 				OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
-
-				key = SEGGER_RTT_WaitKey();
 
 				switch(key)
 				{
@@ -2481,7 +2487,54 @@ main(void)
 
 				break;
 			}
+			
+			case '1':
+			{
+					
+				devSSD1331init();
+				i2c_device_t INA219_slave;
+				INA219_slave.address = 0x40;
+				INA219_slave.baudRate_kbps = gWarpI2cBaudRateKbps;
+				enableI2Cpins(menuI2cPullupValue);
+				
+				uint16_t cal_value = 8192;	
+				uint16_t current_divider_mA = 20;
 
+				uint8_t rxBuff[2] = {0x00, 0x00};
+				uint8_t cmdBuff[1] = {0x00};
+				uint8_t txBuff[2] = {0x00, 0x00};
+
+				
+//set bit 13 of config reg (16V range), PGA gain to +/- 40mV, BADC to 12 bit, and leave SADC to default (12 bit). Leave shunt and bus mode to default. 
+				cmdBuff[0] = 0x00;
+				txBuff[0] = 0x00 | 1<<5;
+				txBuff[0] = 0x00;
+				I2C_DRV_MasterSendDataBlocking(0, &INA219_slave, cmdBuff, 1, txBuff, 2, 100);
+
+//write cal_value to cal register
+				cmdBuff[0] = 0x05;
+				txBuff[0] = (cal_value >> 8) & 0xff;
+				txBuff[1] = (cal_value >> 0) & 0xff;
+				I2C_DRV_MasterSendDataBlocking(0, &INA219_slave, cmdBuff, 1, txBuff, 2, 100);
+
+				cmdBuff[0] = 0x04;
+				rxBuff[0] = 0x00;
+				rxBuff[1] = 0x00;
+				
+				SEGGER_RTT_WriteString(0, "\r\nCurrent Readings\r\n");
+				for(int i = 0; i<10; i++)
+				{
+					uint8_t print_string[20];
+					I2C_DRV_MasterReceiveDataBlocking(0, &INA219_slave, cmdBuff, 1, rxBuff, 2, 100);
+					uint16_t current_raw = rxBuff[0] << 8 | rxBuff[1];
+					float current_raw_float = (float)current_raw;
+
+					float current_mA = current_raw_float/current_divider_mA;
+					sprintf(print_string, "%x,\r\n", current_raw); 
+					SEGGER_RTT_WriteString(0, print_string);
+				}				
+				break;
+			}
 
 			/*
 			 *	Ignore naked returns.
